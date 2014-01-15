@@ -43,7 +43,8 @@ import org.hbase.async.generated.ClientPB;
  */
 public final class GetRequest extends HBaseRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey,
-             HBaseRpc.HasFamily, HBaseRpc.HasQualifiers {
+             HBaseRpc.HasFamily, HBaseRpc.HasQualifiers,
+             HBaseRpc.HasFilter {
 
   private static final byte[] GET = new byte[] { 'g', 'e', 't' };
   static final byte[] GGET = new byte[] { 'G', 'e', 't' };  // HBase 0.95+
@@ -53,6 +54,8 @@ public final class GetRequest extends HBaseRpc
   private byte[] family;     // TODO(tsuna): Handle multiple families?
   private byte[][] qualifiers;
   private long lockid = RowLock.NO_LOCK;
+  private byte[] filter;
+  private byte[] filterName;
 
   /**
    * How many versions of each cell to retrieve.
@@ -293,6 +296,18 @@ public final class GetRequest extends HBaseRpc
     return versions >>> 1;
   }
 
+   /** Specifies an filter..  */
+   public GetRequest filter(final byte[] filter) {
+     this.filter = filter;
+     return this;
+   }
+
+   /** Specifies an filter..  */
+   public GetRequest filterName(final byte[] filterName) {
+     this.filterName = filterName;
+     return this;
+   }
+
   @Override
   byte[] method(final byte server_version) {
     if (server_version >= RegionClient.SERVER_VERSION_095_OR_ABOVE) {
@@ -319,6 +334,16 @@ public final class GetRequest extends HBaseRpc
   @Override
   public byte[][] qualifiers() {
     return qualifiers;
+  }
+
+  @Override
+  public byte[] filter() {
+    return filter;
+  }
+
+  @Override
+  public byte[] filterName() {
+    return filterName;
   }
 
   public String toString() {
@@ -352,6 +377,11 @@ public final class GetRequest extends HBaseRpc
     size += 8;  // long: Lock ID.
     size += 4;  // int:  Max number of versions to return.
     size += 1;  // byte: Whether or not to use a filter.
+    if (filterName != null && filter != null) {
+       size += 3;  // vint: row filter name length (3 bytes => max length = 32768).
+       size += filterName.length;  // The filter name.
+       size += filter.length;  // serialized filter see org.apache.hadoop.hbase.util.Writables.getBytes
+    }
     if (server_version >= 26) {  // New in 0.90 (because of HBASE-3174).
       size += 1;  // byte: Whether or not to cache the blocks read.
     }
@@ -429,15 +459,16 @@ public final class GetRequest extends HBaseRpc
     writeByteArray(buf, key);
     buf.writeLong(lockid);  // Lock ID.
     buf.writeInt(maxVersions()); // Max number of versions to return.
-    buf.writeByte(0x00); // boolean (false): whether or not to use a filter.
-    // If the previous boolean was true:
-    //   writeByteArray(buf, filter name as byte array);
-    //   write the filter itself
-
+    if (filterName != null && filter != null) {
+       buf.writeByte(0x01); // boolean (true): whether or not to use a filter.
+       writeByteArray(buf, filterName); // the filter name
+       buf.writeBytes(filter); // the filter
+    } else {
+       buf.writeByte(0x00); // boolean (false): whether or not to use a filter.
+    }
     if (server_version >= 26) {  // New in 0.90 (because of HBASE-3174).
       buf.writeByte(0x01);  // boolean (true): whether to cache the blocks.
     }
-
     // TimeRange
     buf.writeLong(0);               // Minimum timestamp.
     buf.writeLong(Long.MAX_VALUE);  // Maximum timestamp.
