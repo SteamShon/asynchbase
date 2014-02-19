@@ -66,6 +66,7 @@ asynchbase_SOURCES := \
 	src/Bytes.java	\
 	src/ClientStats.java	\
 	src/ColumnPaginationFilter.java \
+	src/ColumnPaginationByteOffsetFilter.java \
 	src/ColumnPrefixFilter.java	\
 	src/ColumnRangeFilter.java	\
 	src/CompareAndSetRequest.java	\
