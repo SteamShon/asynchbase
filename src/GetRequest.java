@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import org.jboss.netty.buffer.ChannelBuffer;
 
 import org.hbase.async.generated.ClientPB;
+import org.hbase.async.generated.FilterPB;
 
 /**
  * Reads something from HBase.
@@ -56,6 +57,7 @@ public final class GetRequest extends HBaseRpc
   private long lockid = RowLock.NO_LOCK;
   private byte[] filter;
   private byte[] filterName;
+  private ScanFilter scanFilter;
 
   /**
    * How many versions of each cell to retrieve.
@@ -302,6 +304,19 @@ public final class GetRequest extends HBaseRpc
      return this;
    }
 
+   /**
+   * Specifies the filter to apply to this get request.
+   * @param filter The filter.  If {@code null}, then no filter will be used.
+   * @since 1.5
+   */
+   public void filter(final ScanFilter filter) {
+     this.scanFilter = filter;
+     if (filter != null) {
+        this.filter = filter.serialize();
+        this.filterName = filter.name();
+     }
+   }
+
    /** Specifies an filter..  */
    public GetRequest filterName(final byte[] filterName) {
      this.filterName = filterName;
@@ -426,7 +441,14 @@ public final class GetRequest extends HBaseRpc
       getpb.addColumn(column.build());
     }
 
-    // TODO: Filters.
+    if (filterName != null && filter != null) {
+      FilterPB.Filter filterPB =
+        FilterPB.Filter.newBuilder()
+                       .setNameBytes(Bytes.wrap(filterName))
+                       .setSerializedFilter(Bytes.wrap(filter))
+                       .build();
+      getpb.setFilter(filterPB);
+    }
 
     final int versions = maxVersions();  // Shadows this.versions
     if (versions != 1) {

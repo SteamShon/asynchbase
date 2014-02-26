@@ -39,7 +39,7 @@ proto_builddir := $(top_builddir)/protobuf
 spec_title := Asynchronous HBase Client
 spec_vendor := The Async HBase Authors
 # Semantic Versioning (see http://semver.org/).
-spec_version := 1.5.0.2-SNAPSHOT
+spec_version := 1.5.0.3-SNAPSHOT
 jar := $(top_builddir)/asynchbase-$(spec_version).jar
 
 asynchbase_PROTOS := \
@@ -66,7 +66,6 @@ asynchbase_SOURCES := \
 	src/Bytes.java	\
 	src/ClientStats.java	\
 	src/ColumnPaginationFilter.java \
-	src/ColumnPaginationByteOffsetFilter.java \
 	src/ColumnPrefixFilter.java	\
 	src/ColumnRangeFilter.java	\
 	src/CompareAndSetRequest.java	\

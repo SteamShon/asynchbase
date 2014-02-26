@@ -36,62 +36,79 @@ import org.hbase.async.generated.FilterPB;
  */
 public final class ColumnPaginationFilter extends ScanFilter {
 
-  private static final byte[] NAME = Bytes.ISO88591("org.apache.hadoop.hbase"
-      + ".filter.ColumnPaginationFilter");
+    private static final byte[] NAME = Bytes.ISO88591("org.apache.hadoop.hbase"
+            + ".filter.ColumnPaginationFilter");
 
-  private int limit = 0;
-  private int offset = -1;
+    private int limit = 0;
+    private int offset = -1;
+    private byte[] columnOffset = null;
 
-  /**
-   * Constructor to define filter of numerical limit and offset.
-   * @param limit The maximum number of columns to return.
-   * @param offset The integer offset where to start pagination.
-   */
-  public ColumnPaginationFilter(final int limit, final int offset) {
-    this.limit = limit;
-    this.offset = offset;
-  }
+    /**
+     * Constructor to define filter of numerical limit and offset.
+     * @param limit The maximum number of columns to return.
+     * @param offset The integer offset where to start pagination.
+     */
+    public ColumnPaginationFilter(final int limit, final int offset) {
+        this.limit = limit;
+        this.offset = offset;
+    }
 
-  @Override
-  byte[] serialize() {
-    final FilterPB.ColumnPaginationFilter.Builder filter =
-      FilterPB.ColumnPaginationFilter.newBuilder();
+    /**
+     * Constructor to define filter of numerical limit and column qualifier bytes offset.
+     * @param limit The maximum number of columns to return.
+     * @param columnOffset The bytes offset where to start pagination.
+     */
+    public ColumnPaginationFilter(final int limit, final byte[] columnOffset) {
+        this.limit = limit;
+        this.columnOffset = columnOffset;
+    }
 
-    filter.setLimit(limit);
-    if (offset > -1)
-      filter.setOffset(offset);
+    @Override
+    byte[] serialize() {
+        final FilterPB.ColumnPaginationFilter.Builder filter =
+                FilterPB.ColumnPaginationFilter.newBuilder();
 
-    //TODO: add support for column_offset
+        filter.setLimit(limit);
+        if (offset > -1)
+            filter.setOffset(offset);
 
-    return filter.build().toByteArray();
-  }
+        if (columnOffset != null)
+            filter.setColumnOffset(Bytes.wrap(columnOffset));
 
-  @Override
-  byte[] name() {
-    return NAME;
-  }
+        return filter.build().toByteArray();
+    }
 
-  @Override
-  int predictSerializedSize() {
-    return 1 + NAME.length
-      + 4 + 4;
-  }
+    @Override
+    byte[] name() {
+        return NAME;
+    }
 
-  @Override
-  void serializeOld(final ChannelBuffer buf) {
-    buf.writeByte((byte) NAME.length);
-    buf.writeBytes(NAME);
+    @Override
+    int predictSerializedSize() {
+        return 1 + NAME.length + 4 + 4
+                + 3 + (columnOffset == null ? 0 : columnOffset.length);
+    }
 
-    // Limit
-    buf.writeInt(this.limit);
+    @Override
+    void serializeOld(final ChannelBuffer buf) {
+        buf.writeByte((byte) NAME.length); // 1
+        buf.writeBytes(NAME); // NAME.length
 
-    // Integer Offset
-    buf.writeInt(this.offset);
-  }
+        // Limit
+        buf.writeInt(this.limit); // 4
 
-  public String toString() {
-    return "ColumnPaginationFilter(limit=" + limit
-      + ", offset=" + offset + ")";
-  }
+        // Integer Offset
+        buf.writeInt(this.offset); // 4
+
+        // Column Offset
+        if (this.columnOffset != null)
+            HBaseRpc.writeByteArray(buf, this.columnOffset); // 3 + columnOffset.length
+    }
+
+    public String toString() {
+        return "ColumnPaginationFilter(limit=" + limit
+                + ", offset=" + offset
+                + ", columnOffset=" + Bytes.pretty(this.columnOffset) + ")";
+    }
 
 }
