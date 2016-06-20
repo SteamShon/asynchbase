@@ -39,7 +39,7 @@ proto_builddir := $(top_builddir)/protobuf
 spec_title := Asynchronous HBase Client
 spec_vendor := The Async HBase Authors
 # Semantic Versioning (see http://semver.org/).
-spec_version := 1.7.1-SNAPSHOT
+spec_version := 1.7.2-SNAPSHOT
 jar := $(top_builddir)/asynchbase-$(spec_version).jar
 
 asynchbase_PROTOS := \
@@ -109,6 +109,8 @@ asynchbase_SOURCES := \
 	src/RegionOfflineException.java	\
 	src/RegionMovedException.java	\
 	src/RegionOpeningException.java	\
+	src/RegionServerAbortedException.java	\
+	src/RegionServerStoppedException.java	\
 	src/RemoteException.java	\
 	src/RpcTimedOutException.java	\
 	src/RowFilter.java	\
@@ -119,6 +121,7 @@ asynchbase_SOURCES := \
 	src/SecureRpcHelper.java	\
 	src/SecureRpcHelper94.java	\
 	src/SecureRpcHelper96.java	\
+	src/ServerNotRunningYetException.java	\
 	src/SingletonList.java	\
 	src/SubstringComparator.java	\
 	src/TableNotFoundException.java	\
@@ -168,6 +171,7 @@ unittest_SRC := \
 	test/TestRegionClient.java	\
 	test/TestRegionClientDecode.java	\
 	test/TestRegionClientSendRpc.java	\
+	test/TestScanner.java	\
 	test/TestSecureRpcHelper.java	\
 	test/TestSecureRpcHelper96.java	\
 	test/TestSecureRpcHelper94.java	\
