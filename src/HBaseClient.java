@@ -1944,7 +1944,15 @@ public final class HBaseClient {
     request.attempt++;
     final byte[] table = request.table;
     final byte[] key = request.key;
-    final RegionInfo region = getRegion(table, key);
+//    final RegionInfo region = getRegion(table, key);
+    final RegionInfo region;
+    if (request.isProbe()) {
+      //it is a probe, to find a region.
+      //so don't use the cache, it might have stale data
+      region = null;
+    } else {
+      region = getRegion(table, key);
+    }
 
     final class RetryRpc implements Callback<Deferred<Object>, Object> {
       public Deferred<Object> call(final Object arg) {
@@ -2739,6 +2747,7 @@ public final class HBaseClient {
       // which could happen if we were trying to scan from the beginning of
       // the table.  So instead use "\0" as the key.
       exists_rpc = GetRequest.exists(rpc.table, probeKey(rpc.key));
+      exists_rpc.setProbe(true);
       newlist.add(exists_rpc);
       if (can_retry_rpc) {
         newlist.add(rpc);
@@ -2766,6 +2775,7 @@ public final class HBaseClient {
             got_nsre.putIfAbsent(region_name, nsred_rpcs);
           if (added == null) {  // We've just put `nsred_rpcs'.
             exists_rpc = GetRequest.exists(rpc.table, probeKey(rpc.key));
+            exists_rpc.setProbe(true);
             nsred_rpcs.add(exists_rpc);  // We hold the lock on nsred_rpcs
             if (can_retry_rpc) {
               nsred_rpcs.add(rpc);         // so we can safely add those 2.
@@ -2786,6 +2796,7 @@ public final class HBaseClient {
                             + " an empty list of NSRE'd RPCs (" + added
                             + ") for " + Bytes.pretty(region_name));
                   exists_rpc = GetRequest.exists(rpc.table, probeKey(rpc.key));
+                  exists_rpc.setProbe(true);
                   added.add(exists_rpc);
                 } else {
                   exists_rpc = added.get(0);
