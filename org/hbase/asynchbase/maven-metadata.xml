@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>org.hbase</groupId>
+  <artifactId>asynchbase</artifactId>
+  <versioning>
+    <release>1.7.2-S2GRAPH</release>
+    <versions>
+      <version>1.7.2-S2GRAPH</version>
+    </versions>
+    <lastUpdated>20160802145633</lastUpdated>
+  </versioning>
+</metadata>
