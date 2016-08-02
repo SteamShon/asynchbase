@@ -478,7 +478,8 @@ public abstract class HBaseRpc {
   }
 
   /**
-   * If true, this RPC should fail-fast as soon as we know we have a problem.
+   * If true, this RPC is a probe which checks if the destination region is
+   * online.
    */
   boolean probe = false;
 
@@ -489,7 +490,20 @@ public abstract class HBaseRpc {
   public void setProbe(boolean probe) {
     this.probe = probe;
   }
-  
+
+  /**
+   * Whether or not if this RPC is a probe that is suspended by an NSRE
+   */
+  private boolean suspended_probe = false;
+
+  boolean isSuspendedProbe() {
+    return suspended_probe;
+  }
+
+  void setSuspendedProbe(boolean suspended_probe) {
+    this.suspended_probe = suspended_probe;
+  }
+
   /**
    * Package private constructor for RPCs that aren't for any region.
    */
@@ -615,7 +629,7 @@ public abstract class HBaseRpc {
         region_client.removeRpc(HBaseRpc.this, true);
       }
       
-      callback(new RpcTimedOutException("RPC ID [" + rpc_id + 
+      callback(new RpcTimedOutException("RPC ID [" + rpc_id + "], TABLE [" + Bytes.pretty(table) +
           "] timed out waiting for response from HBase on region client [" + 
           region_client + " ] for over " + timeout + "ms"));
       timeout_task = null;

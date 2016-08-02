@@ -1292,6 +1292,28 @@ public final class HBaseClient {
     return region2client.get(region);
   }
 
+
+  Deferred<Object> scanNextRows(final Scanner scanner, final int rpcTimeout) {
+    final RegionInfo region = scanner.currentRegion();
+    final RegionClient client = clientFor(region);
+    if (client == null) {
+      // Oops, we no longer know anything about this client or region.  Our
+      // cache was probably invalidated while the client was scanning.  This
+      // means that we lost the connection to that RegionServer, so we have to
+      // re-open this scanner if we wanna keep scanning.
+      scanner.invalidate();        // Invalidate the scanner so that ...
+      @SuppressWarnings("unchecked")
+      final Deferred<Object> d = (Deferred) scanner.nextRows();
+      return d;  // ... this will re-open it ______.^
+    }
+    num_scans.increment();
+    final HBaseRpc next_request = scanner.getNextRowsRequest();
+    next_request.setTimeout(rpcTimeout);
+    final Deferred<Object> d = next_request.getDeferred();
+    client.sendRpc(next_request);
+    return d;
+  }
+
   /**
    * Package-private access point for {@link Scanner}s to scan more rows.
    * @param scanner The scanner to use.
@@ -1922,7 +1944,15 @@ public final class HBaseClient {
     request.attempt++;
     final byte[] table = request.table;
     final byte[] key = request.key;
-    final RegionInfo region = getRegion(table, key);
+//    final RegionInfo region = getRegion(table, key);
+    final RegionInfo region;
+    if (request.isProbe()) {
+      //it is a probe, to find a region.
+      //so don't use the cache, it might have stale data
+      region = null;
+    } else {
+      region = getRegion(table, key);
+    }
 
     final class RetryRpc implements Callback<Deferred<Object>, Object> {
       public Deferred<Object> call(final Object arg) {
@@ -2702,6 +2732,11 @@ public final class HBaseClient {
                   final byte[] region_name,
                   final RecoverableException e) {
     num_nsre_rpcs.increment();
+    if (rpc.isProbe()) {
+      synchronized (rpc) {
+        rpc.setSuspendedProbe(true);
+      }
+    }
     final boolean can_retry_rpc = !cannotRetryRequest(rpc);
     boolean known_nsre = true;  // We already aware of an NSRE for this region?
     ArrayList<HBaseRpc> nsred_rpcs = got_nsre.get(region_name);
@@ -2712,6 +2747,7 @@ public final class HBaseClient {
       // which could happen if we were trying to scan from the beginning of
       // the table.  So instead use "\0" as the key.
       exists_rpc = GetRequest.exists(rpc.table, probeKey(rpc.key));
+      exists_rpc.setProbe(true);
       newlist.add(exists_rpc);
       if (can_retry_rpc) {
         newlist.add(rpc);
@@ -2739,6 +2775,7 @@ public final class HBaseClient {
             got_nsre.putIfAbsent(region_name, nsred_rpcs);
           if (added == null) {  // We've just put `nsred_rpcs'.
             exists_rpc = GetRequest.exists(rpc.table, probeKey(rpc.key));
+            exists_rpc.setProbe(true);
             nsred_rpcs.add(exists_rpc);  // We hold the lock on nsred_rpcs
             if (can_retry_rpc) {
               nsred_rpcs.add(rpc);         // so we can safely add those 2.
@@ -2759,6 +2796,7 @@ public final class HBaseClient {
                             + " an empty list of NSRE'd RPCs (" + added
                             + ") for " + Bytes.pretty(region_name));
                   exists_rpc = GetRequest.exists(rpc.table, probeKey(rpc.key));
+                  exists_rpc.setProbe(true);
                   added.add(exists_rpc);
                 } else {
                   exists_rpc = added.get(0);
@@ -2780,8 +2818,10 @@ public final class HBaseClient {
             } else if (can_retry_rpc) {
               reject = false;
               if (nsred_rpcs.contains(rpc)) {  // XXX O(n) check...  :-/
-                LOG.error("WTF?  Trying to add " + rpc + " twice to NSREd RPC"
-                          + " on " + Bytes.pretty(region_name));
+                // This can happen when a probe gets an NSRE and regions_cache
+                // is updated by another thread while it's retrying
+                LOG.debug("Trying to add " + rpc + " twice to NSREd RPC"
+                            + " on " + Bytes.pretty(region_name));
               } else {
                 nsred_rpcs.add(rpc);
               }
@@ -2792,23 +2832,27 @@ public final class HBaseClient {
         }
       } // end of the synchronized block.
 
-      // Stop here if this is a known NSRE and `rpc' is not our probe RPC.
-      if (known_nsre && exists_rpc != rpc) {
-        if (size != nsre_high_watermark && size % NSRE_LOG_EVERY == 0) {
-          final String msg = "There are now " + size
-            + " RPCs pending due to NSRE on " + Bytes.pretty(region_name);
-          if (size + NSRE_LOG_EVERY < nsre_high_watermark) {
-            LOG.info(msg);  // First message logged at INFO level.
-          } else {
-            LOG.warn(msg);  // Last message logged with increased severity.
+      // Stop here if this is a known NSRE and `rpc' is not our probe RPC that
+      // is not suspended
+      synchronized (exists_rpc) {
+        if (known_nsre && exists_rpc != rpc && !exists_rpc.isSuspendedProbe()) {
+          if (size != nsre_high_watermark && size % NSRE_LOG_EVERY == 0) {
+            final String msg = "There are now " + size
+              + " RPCs pending due to NSRE on " + Bytes.pretty(region_name);
+            if (size + NSRE_LOG_EVERY < nsre_high_watermark) {
+              LOG.info(msg);  // First message logged at INFO level.
+            } else {
+              LOG.warn(msg);  // Last message logged with increased severity.
+            }
           }
+          if (reject) {
+            rpc.callback(new PleaseThrottleException(size + " RPCs waiting on "
+              + Bytes.pretty(region_name) + " to come back online", e, rpc,
+              exists_rpc.getDeferred()));
+          }
+          return;  // This NSRE is already known and being handled.
         }
-        if (reject) {
-          rpc.callback(new PleaseThrottleException(size + " RPCs waiting on "
-            + Bytes.pretty(region_name) + " to come back online", e, rpc,
-            exists_rpc.getDeferred()));
-        }
-        return;  // This NSRE is already known and being handled.
+        exists_rpc.setSuspendedProbe(false);
       }
     }
 
@@ -2880,7 +2924,10 @@ public final class HBaseClient {
                   + Bytes.pretty(region_name) + " seems to have cleared");
             }
           }
-          final Iterator<HBaseRpc> i = rpcs.iterator();
+          final ArrayList<HBaseRpc> rpcs_to_replay = new ArrayList<HBaseRpc>(rpcs);
+          rpcs.clear();  // To avoid cyclic RPC chain
+
+          final Iterator<HBaseRpc> i = rpcs_to_replay.iterator();
           if (i.hasNext()) {
             HBaseRpc r = i.next();
             if (r != probe) {
@@ -2894,10 +2941,9 @@ public final class HBaseClient {
               }
             }
           } else {
-            LOG.error("WTF?  Impossible!  Empty rpcs array=" + rpcs
-                      + " found by " + this);
+            // We avoided cyclic RPC chain
+            LOG.debug("Empty rpcs array=" + rpcs_to_replay + " found by " + this);
           }
-          rpcs.clear();
         }
 
         return arg;

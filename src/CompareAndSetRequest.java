@@ -49,7 +49,7 @@ import org.hbase.async.generated.HBasePB.CompareType;
 final class CompareAndSetRequest extends HBaseRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey,
              HBaseRpc.HasFamily, HBaseRpc.HasQualifier, HBaseRpc.HasValue,
-             HBaseRpc.IsEdit, HBaseRpc.HasTimestamp {
+             HBaseRpc.IsEdit {
 
   /** Awesome RPC method name...  For HBase 0.94 and earlier only.  */
   private static final byte[] CHECKANDPUT = {
@@ -103,10 +103,9 @@ final class CompareAndSetRequest extends HBaseRpc
   }
 
   @Override
-  public byte[] qualifier() { return put.qualifier(); }
-
-  @Override
-  public long timestamp() { return put.timestamp(); }
+  public byte[] qualifier() {
+    return put.qualifier();
+  }
 
   /**
    * Returns the expected value.
@@ -174,40 +173,41 @@ final class CompareAndSetRequest extends HBaseRpc
     final MutationProto.ColumnValue.QualifierValue qual =
       MutationProto.ColumnValue.QualifierValue.newBuilder()
       .setQualifier(qualifier)
-      .setValue(value).setTimestamp(timestamp())
+      .setValue(value)
+      .setTimestamp(put.timestamp())
       .build();
     final MutationProto.ColumnValue column =
       MutationProto.ColumnValue.newBuilder()
       .setFamily(family)
-              .addQualifierValue(qual)
+      .addQualifierValue(qual)
       .build();
     final MutationProto.Builder put = MutationProto.newBuilder()
       .setRow(key)
-            .setMutateType(MutationProto.MutationType.PUT)
-            .addColumnValue(column);
+      .setMutateType(MutationProto.MutationType.PUT)
+      .addColumnValue(column);
 
     // The condition that needs to match for the edit to be applied.
     final ByteArrayComparable expected = ByteArrayComparable.newBuilder()
-            .setValue(Bytes.wrap(this.expected))
+      .setValue(Bytes.wrap(this.expected))
       .build();
     final BinaryComparator cmp = BinaryComparator.newBuilder()
-            .setComparable(expected)
+      .setComparable(expected)
       .build();
     final Comparator comparator = Comparator.newBuilder()
-            .setNameBytes(BINARYCOMPARATOR)
-            .setSerializedComparator(Bytes.wrap(cmp.toByteArray()))
+      .setNameBytes(BINARYCOMPARATOR)
+      .setSerializedComparator(Bytes.wrap(cmp.toByteArray()))
       .build();
     final Condition cond = Condition.newBuilder()
       .setRow(key)
       .setFamily(family)
-            .setQualifier(qualifier)
-            .setCompareType(CompareType.EQUAL)
-            .setComparator(comparator)
+      .setQualifier(qualifier)
+      .setCompareType(CompareType.EQUAL)
+      .setComparator(comparator)
       .build();
 
     final MutateRequest req = MutateRequest.newBuilder()
-            .setRegion(region.toProtobuf())
-            .setMutation(put.build())
+      .setRegion(region.toProtobuf())
+      .setMutation(put.build())
       .setCondition(cond)
       .build();
     return toChannelBuffer(MUTATE, req);

@@ -31,8 +31,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.util.CharsetUtil;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -194,6 +192,11 @@ public final class Scanner {
   private GetNextRowsRequest get_next_rows_request;
 
   /**
+   * Scanner-wise rpc timeout
+   */
+  private int rpcTimeout = -1;
+
+  /**
    * Constructor.
    * <strong>This byte array will NOT be copied.</strong>
    * @param table The non-empty name of the table to use.
@@ -303,6 +306,11 @@ public final class Scanner {
 
   /**
    * Specifies multiple column families to scan.
+   * <p>
+   * NOTE: This will null out the qualifiers list if it was set previously as
+   * well as replace any families that were already set.
+   * @param families A list of one or more family names.
+   * @throws IllegalStateException if scanning already started.
    * @since 1.5
    */
   public void setFamilies(final String... families) {
@@ -311,8 +319,8 @@ public final class Scanner {
     for (int i = 0; i < families.length; i++) {
       this.families[i] = families[i].getBytes();
       KeyValue.checkFamily(this.families[i]);
-      qualifiers[i] = null;
     }
+    qualifiers = null;
   }
 
   /**
@@ -656,6 +664,10 @@ public final class Scanner {
     this.max_timestamp = max_timestamp;
   }
 
+  public void setRpcTimeout(final int timeout) { this.rpcTimeout = timeout; }
+
+  public int getRpcTimeout() { return this.rpcTimeout; }
+
   /**
    * Scans a number of rows.  Calling this method is equivalent to:
    * <pre>
@@ -730,10 +742,17 @@ public final class Scanner {
     // Need to silence this warning because the callback `got_next_row'
     // declares its return type to be Object, because its return value
     // may or may not be deferred.
-    @SuppressWarnings("unchecked")
-    final Deferred<ArrayList<ArrayList<KeyValue>>> d = (Deferred)
-      client.scanNextRows(this).addCallbacks(got_next_row, nextRowErrback());
-    return d;
+    if (rpcTimeout < 0) {
+      @SuppressWarnings("unchecked")
+      final Deferred<ArrayList<ArrayList<KeyValue>>> d = (Deferred)
+              client.scanNextRows(this).addCallbacks(got_next_row, nextRowErrback());
+      return d;
+    } else {
+      @SuppressWarnings("unchecked")
+      final Deferred<ArrayList<ArrayList<KeyValue>>> d = (Deferred)
+              client.scanNextRows(this, rpcTimeout).addCallbacks(got_next_row, nextRowErrback());
+      return d;
+    }
   }
 
   /**
