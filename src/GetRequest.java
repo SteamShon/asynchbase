@@ -44,7 +44,7 @@ import org.hbase.async.generated.HBasePB.TimeRange;
  */
 public final class GetRequest extends HBaseRpc
   implements HBaseRpc.HasTable, HBaseRpc.HasKey,
-             HBaseRpc.HasFamily, HBaseRpc.HasQualifiers {
+             HBaseRpc.HasFamily, HBaseRpc.HasQualifiers, HBaseRpc.SupportsRpcTimeout {
 
   private static final byte[] GET = new byte[] { 'g', 'e', 't' };
   static final byte[] GGET = new byte[] { 'G', 'e', 't' };  // HBase 0.95+
@@ -79,6 +79,8 @@ public final class GetRequest extends HBaseRpc
   private int storeLimit = -1;
 
   private int storeOffset = 0;
+
+  private int rpctimeout = 1000;
 
   /**
    * Constructor.
@@ -461,6 +463,16 @@ public final class GetRequest extends HBaseRpc
         this.storeOffset = offset;
         return this;
     }
+
+  public GetRequest setRpcTimeout(int timeout) {
+    this.rpctimeout = timeout;
+    return this;
+  }
+
+  @Override
+  public int rpctimeout() {
+    return this.rpctimeout;
+  }
 
   @Override
   byte[] method(final byte server_version) {

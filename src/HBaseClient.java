@@ -1991,6 +1991,21 @@ public final class HBaseClient {
       if (client != null && client.isAlive()) {
         request.setRegion(region);
         final Deferred<Object> d = request.getDeferred();
+        if (request instanceof HBaseRpc.SupportsRpcTimeout
+                && ((HBaseRpc.SupportsRpcTimeout) request).rpctimeout() != 0) {
+          final class RpcTimer implements TimerTask {
+            public void run(final Timeout timeout) {
+              request.callback(new RpcTimeoutException(request));
+            }
+
+            public String toString() {
+              return "RPC timer for " + request;
+            }
+          };
+          request.rpctimeout = timer.newTimeout(new RpcTimer(),
+                  ((HBaseRpc.SupportsRpcTimeout) request).rpctimeout(),
+                  MILLISECONDS);
+        }
         client.sendRpc(request);
         return d;
       }

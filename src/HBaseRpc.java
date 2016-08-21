@@ -189,6 +189,19 @@ public abstract class HBaseRpc {
   public void setTraceRPC(boolean trace_rpc) {
     this.trace_rpc = trace_rpc;
   }
+
+  /**
+   * An RPC that supports RPC timeout
+   *
+   * @since 1.7.0
+   */
+  public interface SupportsRpcTimeout {
+    /**
+     * Returns the RPC timeout in milliseconds to be applied to this RPC.
+     */
+    public HBaseRpc setRpcTimeout(int timeout);
+    public int rpctimeout();
+  }
   
   /*
    * This class, although it's part of the public API, is mostly here to make
@@ -426,7 +439,12 @@ public abstract class HBaseRpc {
   /** An optional timeout in milliseconds for the RPC. -1 means use the 
    * default from the config. 0 means don't timeout. */
   private int timeout = -1;
-  
+
+  /**
+   * RPC timeout, null if this RPC does not support RPC timeouts.
+   */
+  Timeout rpctimeout = null;
+
   /** If the RPC has a timeout set this will be set on submission to the 
    * timer thread. */
   Timeout timeout_handle; // package-private for RegionClient and HBaseClient only.
