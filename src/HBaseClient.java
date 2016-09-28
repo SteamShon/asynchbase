@@ -1292,6 +1292,28 @@ public final class HBaseClient {
     return region2client.get(region);
   }
 
+
+  Deferred<Object> scanNextRows(final Scanner scanner, final int rpcTimeout) {
+    final RegionInfo region = scanner.currentRegion();
+    final RegionClient client = clientFor(region);
+    if (client == null) {
+      // Oops, we no longer know anything about this client or region.  Our
+      // cache was probably invalidated while the client was scanning.  This
+      // means that we lost the connection to that RegionServer, so we have to
+      // re-open this scanner if we wanna keep scanning.
+      scanner.invalidate();        // Invalidate the scanner so that ...
+      @SuppressWarnings("unchecked")
+      final Deferred<Object> d = (Deferred) scanner.nextRows();
+      return d;  // ... this will re-open it ______.^
+    }
+    num_scans.increment();
+    final HBaseRpc next_request = scanner.getNextRowsRequest();
+    next_request.setTimeout(rpcTimeout);
+    final Deferred<Object> d = next_request.getDeferred();
+    client.sendRpc(next_request);
+    return d;
+  }
+
   /**
    * Package-private access point for {@link Scanner}s to scan more rows.
    * @param scanner The scanner to use.
