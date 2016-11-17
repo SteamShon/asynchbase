@@ -76,6 +76,10 @@ public final class GetRequest extends HBaseRpc
   /** When set in the `versions' field, this is an Exist RPC. */
   private static final int EXIST_FLAG = 0x1;
 
+  private int storeLimit = -1;
+
+  private int storeOffset = 0;
+
   /**
    * Constructor.
    * <strong>These byte arrays will NOT be copied.</strong>
@@ -434,6 +438,30 @@ public final class GetRequest extends HBaseRpc
     filter = null;
   }
 
+    /**
+     * Set the maximum number of values to return per row per Column Family
+     *
+     * @param limit the maximum number of values returned / row / CF
+     * @return this for invocation chaining
+     */
+    public GetRequest setMaxResultsPerColumnFamily(int limit) {
+        this.storeLimit = limit;
+        return this;
+    }
+
+    /**
+     * Set offset for the row per Column Family. This offset is only within a
+     * particular row/CF combination. It gets reset back to zero when we move to
+     * the next row or CF.
+     *
+     * @param offset is the number of kvs that will be skipped.
+     * @return this for invocation chaining
+     */
+    public GetRequest setRowOffsetPerColumnFamily(int offset) {
+        this.storeOffset = offset;
+        return this;
+    }
+
   @Override
   byte[] method(final byte server_version) {
     if (server_version >= RegionClient.SERVER_VERSION_095_OR_ABOVE) {
@@ -577,6 +605,9 @@ public final class GetRequest extends HBaseRpc
       getpb.setExistenceOnly(true);
     }
 
+    getpb.setStoreOffset(this.storeOffset);
+    getpb.setStoreLimit(this.storeLimit);
+    
     final ClientPB.GetRequest.Builder get = ClientPB.GetRequest.newBuilder()
       .setRegion(region.toProtobuf())
       .setGet(getpb.build());

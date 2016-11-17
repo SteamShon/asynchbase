@@ -629,7 +629,7 @@ public abstract class HBaseRpc {
         region_client.removeRpc(HBaseRpc.this, true);
       }
       
-      callback(new RpcTimedOutException("RPC ID [" + rpc_id + 
+      callback(new RpcTimedOutException("RPC ID [" + rpc_id + "], TABLE [" + Bytes.pretty(table) +
           "] timed out waiting for response from HBase on region client [" + 
           region_client + " ] for over " + timeout + "ms"));
       timeout_task = null;
